@@ -1,0 +1,1232 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Аниматор</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+  html, body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    background: #1a1a2e; color: #eee; overflow: hidden;
+    height: 100vh; height: 100dvh; user-select: none;
+    touch-action: none;
+  }
+  .screen { display: none; height: 100vh; height: 100dvh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ---------- ГЛАВНЫЙ ЭКРАН ---------- */
+  #mainScreen {
+    align-items: center; justify-content: flex-start; gap: 16px;
+    background: linear-gradient(135deg, #16213e, #1a1a2e);
+    padding: 40px 20px 20px; overflow-y: auto;
+  }
+  #mainScreen h1 { font-size: 32px; margin-bottom: 5px; }
+  .btn {
+    background: #4361ee; color: #fff; border: none; padding: 14px 30px;
+    border-radius: 10px; font-size: 17px; cursor: pointer; transition: .2s;
+    font-weight: 600; width: 100%; max-width: 400px;
+  }
+  .btn:active { transform: scale(.97); }
+  .btn.secondary { background: #2d3561; }
+  .btn.small { padding: 10px 16px; font-size: 14px; width: auto; }
+  .btn.danger { background: #e63946; }
+  .btn.green { background: #06d6a0; color: #062; }
+
+  .project-list { width: 100%; max-width: 400px; margin-top: 10px; }
+  .project-item {
+    background: #2d3561; padding: 14px 16px; border-radius: 10px;
+    margin-bottom: 10px; cursor: pointer; display: flex; justify-content: space-between;
+    align-items: center; transition: .2s;
+  }
+  .project-item:active { background: #3d477e; }
+  .project-item .info { font-size: 12px; color: #9aa5c9; margin-top: 4px; }
+  .project-item .del { color: #e63946; font-size: 22px; padding: 0 10px; }
+
+  /* ---------- МОДАЛКА СОЗДАНИЯ ---------- */
+  .modal {
+    display: none; position: fixed; inset: 0; background: rgba(0,0,0,.75);
+    z-index: 100; align-items: center; justify-content: center; padding: 15px;
+  }
+  .modal.active { display: flex; }
+  .modal-box {
+    background: #232946; border-radius: 16px; padding: 24px;
+    width: 100%; max-width: 520px; max-height: 92vh; overflow-y: auto;
+  }
+  .modal-box h2 { margin-bottom: 18px; font-size: 22px; }
+  .field { margin-bottom: 18px; }
+  .field label { display: block; margin-bottom: 8px; font-weight: 600; color: #b8c1ec; font-size: 14px; }
+  .field input[type=text] {
+    width: 100%; padding: 12px; border-radius: 8px; border: 1px solid #3d477e;
+    background: #1a1a2e; color: #fff; font-size: 16px;
+  }
+  .fps-row { display: flex; align-items: center; gap: 12px; }
+  input[type=range] { flex: 1; accent-color: #4361ee; height: 30px; }
+
+  .format-btns { display: flex; gap: 12px; }
+  .format-btn {
+    flex: 1; padding: 16px; border-radius: 10px; border: 2px solid #3d477e;
+    background: #1a1a2e; color: #eee; cursor: pointer; font-size: 15px;
+    font-weight: 600; transition: .2s;
+  }
+  .format-btn.active { border-color: #4361ee; background: #26325e; color: #fff; }
+  .format-btn .ratio-icon {
+    display: inline-block; border: 2px solid currentColor; margin-bottom: 8px;
+    border-radius: 3px;
+  }
+
+  .preview {
+    background: #10101d; border-radius: 12px; padding: 15px;
+    display: flex; flex-direction: column; align-items: center;
+  }
+  .preview-stage {
+    position: relative; height: 100px; width: 100%;
+    border-bottom: 2px solid #3d477e; margin-bottom: 8px;
+  }
+  .ball {
+    width: 28px; height: 28px; background: #f72585; border-radius: 50%;
+    position: absolute; bottom: 0; left: 50%; transform: translateX(-50%);
+  }
+  .preview-label { font-size: 12px; color: #9aa5c9; }
+
+  /* ---------- РЕДАКТОР ---------- */
+  #editorScreen { flex-direction: column; }
+  .topbar {
+    display: flex; align-items: center; gap: 6px; padding: 8px 10px;
+    background: #232946; border-bottom: 1px solid #2d3561; flex-wrap: wrap;
+    flex-shrink: 0;
+  }
+  .topbar .title { font-weight: 700; margin-right: auto; font-size: 14px; }
+  .tool-btn {
+    background: #2d3561; border: none; color: #eee; padding: 8px 10px;
+    border-radius: 8px; cursor: pointer; font-size: 13px; transition: .2s;
+    white-space: nowrap;
+  }
+  .tool-btn:active { background: #3d477e; }
+  .tool-btn.active { background: #4361ee; }
+  .tool-btn.play { background: #06d6a0; color: #062; font-weight: 700; }
+  .tool-btn.export { background: #f72585; }
+
+  .workspace {
+    flex: 1; display: flex; align-items: center; justify-content: center;
+    background: #10101d; overflow: hidden; padding: 10px; position: relative;
+  }
+  .canvas-wrap {
+    position: relative; box-shadow: 0 0 30px rgba(0,0,0,.6); background: #fff;
+    touch-action: none;
+  }
+  canvas#mainCanvas { display: block; cursor: crosshair; touch-action: none; }
+  .canvas-wrap.playing { cursor: default; }
+
+  .slidebar {
+    background: #232946; border-top: 1px solid #2d3561;
+    padding: 8px 10px; display: flex; align-items: center; gap: 8px;
+    overflow-x: auto; overflow-y: hidden; flex-shrink: 0; min-height: 82px;
+  }
+  .slide-thumb {
+    width: 64px; height: 48px; border-radius: 6px; flex: 0 0 auto;
+    background: #fff; border: 2px solid transparent; cursor: pointer;
+    position: relative; overflow: hidden; transition: .2s;
+  }
+  .slide-thumb.active { border-color: #4361ee; }
+  .slide-thumb canvas { width: 100%; height: 100%; display: block; }
+  .slide-thumb .num {
+    position: absolute; bottom: 1px; right: 3px; font-size: 9px;
+    color: #4361ee; font-weight: 700; background: rgba(255,255,255,.85);
+    padding: 0 3px; border-radius: 3px;
+  }
+  .add-slide {
+    width: 48px; height: 48px; border-radius: 6px; flex: 0 0 auto;
+    background: #2d3561; border: 2px dashed #4361ee; color: #4361ee;
+    font-size: 26px; cursor: pointer; display: flex; align-items: center;
+    justify-content: center; transition: .2s;
+  }
+  .add-slide:active { background: #3d477e; }
+
+  /* магазин */
+  .shop-panel {
+    position: absolute; top: 0; right: 0; height: 100%; width: 85%; max-width: 300px;
+    background: #232946; border-left: 1px solid #2d3561; padding: 18px;
+    transform: translateX(100%); transition: .3s; z-index: 50;
+    overflow-y: auto;
+  }
+  .shop-panel.open { transform: translateX(0); }
+  .shop-panel h3 { margin-bottom: 14px; font-size: 17px; }
+  .shape-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 18px; }
+  .shape-btn {
+    background: #2d3561; border: 2px solid #3d477e; border-radius: 8px;
+    padding: 10px; display: flex; align-items: center; gap: 10px;
+    cursor: pointer; transition: .2s; color: #eee; font-size: 14px;
+  }
+  .shape-btn:active { border-color: #4361ee; background: #3d477e; }
+
+  .size-control { margin-bottom: 18px; }
+  .size-control label { font-size: 13px; color: #b8c1ec; display: block; margin-bottom: 6px; }
+  .size-val { font-weight: 700; color: #4361ee; }
+
+  .color-row { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 16px; }
+  .color-swatch {
+    width: 30px; height: 30px; border-radius: 50%; cursor: pointer;
+    border: 3px solid transparent; transition: .2s;
+  }
+  .color-swatch.active { border-color: #fff; transform: scale(1.1); }
+
+  .hint {
+    position: absolute; bottom: 6px; left: 50%; transform: translateX(-50%);
+    font-size: 11px; color: #6c7a9c; pointer-events: none; text-align: center;
+    width: 90%;
+  }
+
+  .autosave {
+    position: fixed; bottom: 10px; right: 10px; background: #06d6a0; color: #062;
+    padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 700;
+    opacity: 0; transition: opacity .3s; pointer-events: none; z-index: 200;
+  }
+  .autosave.show { opacity: 1; }
+
+  .export-overlay {
+    position: fixed; inset: 0; background: rgba(0,0,0,.85); z-index: 300;
+    display: none; align-items: center; justify-content: center; flex-direction: column;
+    gap: 20px; padding: 20px;
+  }
+  .export-overlay.active { display: flex; }
+  .export-overlay h3 { font-size: 20px; }
+  .progress-bar {
+    width: 80%; max-width: 400px; height: 10px; background: #2d3561;
+    border-radius: 5px; overflow: hidden;
+  }
+  .progress-fill {
+    height: 100%; background: #06d6a0; width: 0%; transition: width .2s;
+  }
+  .export-overlay p { color: #9aa5c9; font-size: 14px; text-align: center; }
+
+  .toast {
+    position: fixed; top: 20px; left: 50%; transform: translateX(-50%);
+    background: #4361ee; color: #fff; padding: 12px 20px; border-radius: 10px;
+    font-size: 14px; z-index: 400; opacity: 0; transition: opacity .3s;
+    pointer-events: none; max-width: 90%; text-align: center;
+  }
+  .toast.show { opacity: 1; }
+
+  @media (max-width: 500px) {
+    #mainScreen h1 { font-size: 26px; }
+    .topbar .title { font-size: 12px; }
+    .tool-btn { padding: 7px 8px; font-size: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ============ ГЛАВНЫЙ ЭКРАН ============ -->
+<div id="mainScreen" class="screen active">
+  <h1>🎬 Аниматор</h1>
+  <button class="btn" onclick="openCreateModal()">＋ Создать проект</button>
+  <div class="project-list" id="projectList"></div>
+</div>
+
+<!-- ============ МОДАЛКА СОЗДАНИЯ ============ -->
+<div class="modal" id="createModal">
+  <div class="modal-box">
+    <h2>Новый проект</h2>
+
+    <div class="field">
+      <label>Название проекта</label>
+      <input type="text" id="projName" placeholder="Мой проект" value="Мой проект">
+    </div>
+
+    <div class="field">
+      <label>Кадров в секунду (FPS): <span id="fpsDisplay" style="color:#4361ee">12</span></label>
+      <div class="fps-row">
+        <span style="font-size:12px;color:#6c7a9c">10</span>
+        <input type="range" id="fpsRange" min="10" max="30" value="12" step="1">
+        <span style="font-size:12px;color:#6c7a9c">30</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Предпросмотр плавности</label>
+      <div class="preview">
+        <div class="preview-stage">
+          <div class="ball" id="previewBall"></div>
+        </div>
+        <span class="preview-label">Мячик прыгает в соответствии с FPS</span>
+      </div>
+    </div>
+
+    <div class="field">
+      <label>Формат видео</label>
+      <div class="format-btns">
+        <button class="format-btn active" data-ratio="16:9" onclick="selectFormat(this)">
+          <span class="ratio-icon" style="width:30px;height:17px"></span><br>16:9
+        </button>
+        <button class="format-btn" data-ratio="9:16" onclick="selectFormat(this)">
+          <span class="ratio-icon" style="width:17px;height:30px"></span><br>9:16
+        </button>
+      </div>
+    </div>
+
+    <div style="display:flex;gap:10px;justify-content:flex-end">
+      <button class="btn secondary small" onclick="closeCreateModal()">Отмена</button>
+      <button class="btn small" onclick="createProject()">Создать</button>
+    </div>
+  </div>
+</div>
+
+<!-- ============ РЕДАКТОР ============ -->
+<div id="editorScreen" class="screen">
+  <div class="topbar">
+    <button class="tool-btn" onclick="backToMain()">← Назад</button>
+    <span class="title" id="editorTitle">Проект</span>
+    <button class="tool-btn" id="penBtn" onclick="setTool('pen')">✏️</button>
+    <button class="tool-btn" id="eraserBtn" onclick="setTool('eraser')">🧽</button>
+    <button class="tool-btn" onclick="clearFrame()">🗑</button>
+    <button class="tool-btn" onclick="toggleShop()">🛒</button>
+    <button class="tool-btn export" onclick="exportVideo()">💾 Видео</button>
+    <button class="tool-btn play" id="playBtn" onclick="togglePlay()">▶</button>
+  </div>
+
+  <div class="workspace" id="workspace">
+    <div class="canvas-wrap" id="canvasWrap">
+      <canvas id="mainCanvas"></canvas>
+    </div>
+    <div class="hint" id="hint">Рисуйте пальцем. Серый — предыдущий кадр.</div>
+
+    <!-- Магазин -->
+    <div class="shop-panel" id="shopPanel">
+      <h3>🛒 Магазин фигур</h3>
+      <div class="shape-list">
+        <button class="shape-btn" onclick="addShape('circle')">
+          <svg width="22" height="22"><circle cx="11" cy="11" r="9" fill="currentColor"/></svg> Круг
+        </button>
+        <button class="shape-btn" onclick="addShape('square')">
+          <svg width="22" height="22"><rect x="2" y="2" width="18" height="18" fill="currentColor"/></svg> Квадрат
+        </button>
+        <button class="shape-btn" onclick="addShape('triangle')">
+          <svg width="22" height="22"><polygon points="11,2 20,20 2,20" fill="currentColor"/></svg> Треугольник
+        </button>
+        <button class="shape-btn" onclick="addShape('star')">
+          <svg width="22" height="22"><polygon points="11,2 13.5,8 20,8 15,12.5 17,19 11,15 5,19 7,12.5 2,8 8.5,8" fill="currentColor"/></svg> Звезда
+        </button>
+        <button class="shape-btn" onclick="addShape('heart')">
+          <svg width="22" height="22"><path d="M11 19s-7-5-7-10a4 4 0 0 1 7-2.5A4 4 0 0 1 18 9c0 5-7 10-7 10z" fill="currentColor"/></svg> Сердце
+        </button>
+      </div>
+
+      <div class="size-control">
+        <label>Размер фигуры: <span class="size-val" id="sizeVal">60</span> px</label>
+        <input type="range" id="shapeSize" min="20" max="200" value="60" step="5" style="width:100%">
+      </div>
+
+      <div class="size-control">
+        <label>Цвет</label>
+        <div class="color-row" id="colorRow"></div>
+      </div>
+
+      <div class="size-control">
+        <label>Толщина кисти: <span class="size-val" id="penSizeVal">4</span> px</label>
+        <input type="range" id="penSizeRange" min="1" max="30" value="4" step="1" style="width:100%">
+      </div>
+
+      <p style="font-size:11px;color:#6c7a9c;line-height:1.5">
+        Фигуры добавляются на текущий кадр как статичные объекты.
+      </p>
+
+      <button class="btn secondary small" style="width:100%;margin-top:14px" onclick="toggleShop()">Закрыть</button>
+    </div>
+  </div>
+
+  <div class="slidebar" id="slidebar"></div>
+</div>
+
+<div class="autosave" id="autosaveIndicator">✓ Сохранено</div>
+
+<div class="export-overlay" id="exportOverlay">
+  <h3>💾 Сохранение видео</h3>
+  <div class="progress-bar"><div class="progress-fill" id="progressFill"></div></div>
+  <p id="exportStatus">Подготовка...</p>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+/* ======================================================
+   ГЛОБАЛЬНОЕ СОСТОЯНИЕ
+====================================================== */
+const META_KEY = 'animator_meta_v3';
+const DB_NAME = 'animator_db';
+const DB_STORE = 'frames';
+
+let projects = [];          // метаданные проектов (без тяжёлых данных)
+let currentProject = null;
+let currentProjectIndex = -1;
+
+let frames = [];            // dataURL чистых кадров (в памяти)
+let currentFrame = 0;
+let fps = 12;
+let ratio = '16:9';
+let canvasW = 960, canvasH = 540;
+
+let mainCanvas, ctx;
+let cleanCanvas, cleanCtx;
+let isDrawing = false;
+let lastX = 0, lastY = 0;
+let tool = 'pen';
+let penColor = '#000000';
+let penSize = 4;
+
+let playing = false;
+let playInterval = null;
+
+let shapeColor = '#e63946';
+let shapeSize = 60;
+
+const COLORS = ['#000000','#e63946','#f72585','#4361ee','#06d6a0','#ffd166','#ff8c42','#8338ec','#ffffff'];
+
+let autosaveTimer = null;
+let unsavedChanges = false;
+let dbReady = false;
+
+/* ======================================================
+   INDEXEDDB
+====================================================== */
+function openDB() {
+  return new Promise((resolve, reject) => {
+    const req = indexedDB.open(DB_NAME, 1);
+    req.onupgradeneeded = e => {
+      const db = e.target.result;
+      if (!db.objectStoreNames.contains(DB_STORE)) {
+        db.createObjectStore(DB_STORE, { keyPath: 'key' });
+      }
+    };
+    req.onsuccess = e => {
+      dbReady = true;
+      resolve(e.target.result);
+    };
+    req.onerror = e => reject(e);
+  });
+}
+
+let dbPromise = openDB();
+
+async function saveProjectFrames(projId, frameArr) {
+  const db = await dbPromise;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    const store = tx.objectStore(DB_STORE);
+    frameArr.forEach((data, i) => {
+      const key = projId + '_' + i;
+      if (data) {
+        store.put({ key, data });
+      } else {
+        store.delete(key);
+      }
+    });
+    tx.oncomplete = () => resolve(true);
+    tx.onerror = e => reject(e);
+  });
+}
+
+async function loadProjectFrames(projId, count) {
+  const db = await dbPromise;
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(DB_STORE, 'readonly');
+    const store = tx.objectStore(DB_STORE);
+    const result = new Array(count).fill(null);
+    let loaded = 0;
+    if (count === 0) { resolve(result); return; }
+    for (let i = 0; i < count; i++) {
+      const req = store.get(projId + '_' + i);
+      req.onsuccess = e => {
+        if (e.target.result) result[i] = e.target.result.data;
+        loaded++;
+        if (loaded === count) resolve(result);
+      };
+      req.onerror = () => {
+        loaded++;
+        if (loaded === count) resolve(result);
+      };
+    }
+  });
+}
+
+async function deleteProjectFrames(projId, count) {
+  const db = await dbPromise;
+  return new Promise((resolve) => {
+    const tx = db.transaction(DB_STORE, 'readwrite');
+    const store = tx.objectStore(DB_STORE);
+    for (let i = 0; i < count; i++) store.delete(projId + '_' + i);
+    tx.oncomplete = () => resolve(true);
+  });
+}
+
+/* ======================================================
+   МЕТАДАННЫЕ ПРОЕКТОВ
+====================================================== */
+function loadProjects() {
+  try {
+    const raw = localStorage.getItem(META_KEY);
+    projects = raw ? JSON.parse(raw) : [];
+    if (!Array.isArray(projects)) projects = [];
+  } catch (e) {
+    projects = [];
+  }
+}
+
+function saveProjectsMeta() {
+  try {
+    const meta = projects.map(p => ({
+      id: p.id, name: p.name, fps: p.fps, ratio: p.ratio, frameCount: p.frameCount
+    }));
+    localStorage.setItem(META_KEY, JSON.stringify(meta));
+    return true;
+  } catch (e) {
+    toast('Не удалось сохранить метаданные');
+    return false;
+  }
+}
+
+function showAutosave() {
+  const el = document.getElementById('autosaveIndicator');
+  el.classList.add('show');
+  clearTimeout(el._t);
+  el._t = setTimeout(() => el.classList.remove('show'), 1500);
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  clearTimeout(t._t);
+  t._t = setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+function scheduleAutosave() {
+  unsavedChanges = true;
+  clearTimeout(autosaveTimer);
+  autosaveTimer = setTimeout(async () => {
+    if (currentProject && unsavedChanges) {
+      saveCurrentFrame();
+      currentProject.frameCount = frames.length;
+      try {
+        await saveProjectFrames(currentProject.id, frames);
+        saveProjectsMeta();
+        showAutosave();
+        unsavedChanges = false;
+      } catch (e) {
+        console.error('Автосохранение:', e);
+      }
+    }
+  }, 700);
+}
+
+/* ======================================================
+   ГЛАВНЫЙ ЭКРАН
+====================================================== */
+function renderProjects() {
+  const list = document.getElementById('projectList');
+  if (!projects.length) {
+    list.innerHTML = '<p style="color:#6c7a9c;text-align:center;font-size:13px;padding:20px">Пока нет проектов. Создайте первый!</p>';
+    return;
+  }
+  list.innerHTML = projects.map((p, i) => `
+    <div class="project-item" onclick="openProject(${i})">
+      <div>
+        <div style="font-weight:700;font-size:15px">${escapeHtml(p.name)}</div>
+        <div class="info">FPS: ${p.fps} · ${p.ratio} · ${p.frameCount || 0} кадров</div>
+      </div>
+      <span class="del" onclick="event.stopPropagation(); deleteProject(${i})">✕</span>
+    </div>
+  `).join('');
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+async function deleteProject(i) {
+  const p = projects[i];
+  if (!confirm('Удалить проект «' + p.name + '»?')) return;
+  try {
+    await deleteProjectFrames(p.id, p.frameCount || 0);
+  } catch (e) {}
+  projects.splice(i, 1);
+  saveProjectsMeta();
+  renderProjects();
+}
+
+/* ---------- Модалка ---------- */
+function openCreateModal() {
+  document.getElementById('createModal').classList.add('active');
+  document.getElementById('projName').value = 'Мой проект';
+  document.getElementById('fpsRange').value = 12;
+  document.getElementById('fpsDisplay').textContent = '12';
+  document.querySelectorAll('.format-btn').forEach(b => {
+    b.classList.toggle('active', b.dataset.ratio === '16:9');
+  });
+  previewFps = 12;
+  startPreviewBall();
+}
+function closeCreateModal() {
+  document.getElementById('createModal').classList.remove('active');
+  stopPreviewBall();
+}
+function selectFormat(btn) {
+  document.querySelectorAll('.format-btn').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+}
+
+let previewFps = 12;
+let previewAnimId = null;
+
+document.getElementById('fpsRange').addEventListener('input', e => {
+  previewFps = parseInt(e.target.value);
+  document.getElementById('fpsDisplay').textContent = previewFps;
+  stopPreviewBall();
+  startPreviewBall();
+});
+
+function startPreviewBall() {
+  stopPreviewBall();
+  const ball = document.getElementById('previewBall');
+  const stage = ball.parentElement;
+  const stageW = stage.clientWidth;
+  let x = 0, dir = 1;
+  let y = 0, vy = 0;
+  const baseJump = 45;
+  let lastTime = performance.now();
+  let acc = 0;
+
+  function loop(now) {
+    if (!document.getElementById('createModal').classList.contains('active')) {
+      previewAnimId = null; return;
+    }
+    const dt = now - lastTime;
+    lastTime = now;
+    acc += dt;
+    const frameDur = 1000 / previewFps;
+    if (acc >= frameDur) {
+      acc -= frameDur;
+      if (y >= 0 && vy >= 0) { vy = -baseJump / 4; y = 0; }
+      vy += 0.9;
+      y += vy;
+      if (y > 0) { y = 0; vy = 0; }
+      x += dir * 3;
+      const limit = stageW / 2 - 20;
+      if (x > limit || x < -limit) dir *= -1;
+    }
+    ball.style.transform = `translateX(calc(-50% + ${x}px)) translateY(${y}px)`;
+    previewAnimId = requestAnimationFrame(loop);
+  }
+  previewAnimId = requestAnimationFrame(loop);
+}
+function stopPreviewBall() {
+  if (previewAnimId) { cancelAnimationFrame(previewAnimId); previewAnimId = null; }
+}
+
+/* ---------- Создание проекта ---------- */
+async function createProject() {
+  const name = document.getElementById('projName').value.trim() || 'Без имени';
+  const fpsVal = parseInt(document.getElementById('fpsRange').value);
+  const ratioVal = document.querySelector('.format-btn.active').dataset.ratio;
+
+  const proj = {
+    id: Date.now(),
+    name: name,
+    fps: fpsVal,
+    ratio: ratioVal,
+    frameCount: 1
+  };
+  projects.push(proj);
+  saveProjectsMeta();
+  closeCreateModal();
+  renderProjects();
+  await openProject(projects.length - 1);
+}
+
+/* ======================================================
+   РЕДАКТОР
+====================================================== */
+async function openProject(index) {
+  currentProjectIndex = index;
+  currentProject = projects[index];
+  fps = currentProject.fps;
+  ratio = currentProject.ratio;
+
+  if (ratio === '16:9') { canvasW = 960; canvasH = 540; }
+  else { canvasW = 540; canvasH = 960; }
+
+  document.getElementById('editorTitle').textContent = currentProject.name;
+
+  const count = currentProject.frameCount || 1;
+  try {
+    frames = await loadProjectFrames(currentProject.id, count);
+  } catch (e) {
+    frames = new Array(count).fill(null);
+  }
+  if (frames.length === 0) frames = [null];
+  currentFrame = 0;
+
+  document.getElementById('mainScreen').classList.remove('active');
+  document.getElementById('editorScreen').classList.add('active');
+
+  setupCanvas();
+  renderColorSwatches();
+  setTool('pen');
+  loadFrame(currentFrame);
+  updatePenSizeLabel();
+}
+
+function setupCanvas() {
+  const old = document.getElementById('mainCanvas');
+  const newCanvas = document.createElement('canvas');
+  newCanvas.id = 'mainCanvas';
+  newCanvas.width = canvasW;
+  newCanvas.height = canvasH;
+  if (old && old.parentNode) old.parentNode.replaceChild(newCanvas, old);
+
+  mainCanvas = newCanvas;
+  ctx = mainCanvas.getContext('2d');
+
+  cleanCanvas = document.createElement('canvas');
+  cleanCanvas.width = canvasW;
+  cleanCanvas.height = canvasH;
+  cleanCtx = cleanCanvas.getContext('2d');
+
+  resizeCanvasDisplay();
+
+  mainCanvas.addEventListener('pointerdown', startDraw);
+  mainCanvas.addEventListener('pointermove', drawMove);
+  mainCanvas.addEventListener('pointerup', endDraw);
+  mainCanvas.addEventListener('pointercancel', endDraw);
+  mainCanvas.addEventListener('pointerleave', endDraw);
+}
+
+function resizeCanvasDisplay() {
+  if (!mainCanvas) return;
+  const ws = document.getElementById('workspace');
+  if (!ws) return;
+  const maxW = ws.clientWidth - 20;
+  const maxH = ws.clientHeight - 20;
+  const scale = Math.min(maxW / canvasW, maxH / canvasH, 1);
+  mainCanvas.style.width = (canvasW * scale) + 'px';
+  mainCanvas.style.height = (canvasH * scale) + 'px';
+}
+
+async function backToMain() {
+  if (playing) stopPlay();
+  saveCurrentFrame();
+  if (currentProject) {
+    currentProject.frameCount = frames.length;
+    try {
+      await saveProjectFrames(currentProject.id, frames);
+      saveProjectsMeta();
+    } catch (e) {}
+  }
+  document.getElementById('editorScreen').classList.remove('active');
+  document.getElementById('mainScreen').classList.add('active');
+  document.getElementById('shopPanel').classList.remove('open');
+  currentProject = null;
+  currentProjectIndex = -1;
+  renderProjects();
+}
+
+/* ---------- Кадры ---------- */
+function loadFrame(index) {
+  currentFrame = index;
+  cleanCtx.clearRect(0, 0, canvasW, canvasH);
+  const data = frames[index];
+  if (data) {
+    const img = new Image();
+    img.onload = () => {
+      cleanCtx.drawImage(img, 0, 0, canvasW, canvasH);
+      composeView();
+    };
+    img.src = data;
+  } else {
+    composeView();
+  }
+  renderSlidebar();
+}
+
+function saveCurrentFrame() {
+  if (!cleanCanvas) return;
+  try {
+    frames[currentFrame] = cleanCanvas.toDataURL('image/png');
+  } catch (e) {}
+}
+
+function composeView() {
+  if (!ctx) return;
+  ctx.clearRect(0, 0, canvasW, canvasH);
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvasW, canvasH);
+
+  const prev = (currentFrame > 0) ? frames[currentFrame - 1] : null;
+
+  if (prev) {
+    const img = new Image();
+    img.onload = () => {
+      ctx.drawImage(img, 0, 0, canvasW, canvasH);
+      ctx.globalCompositeOperation = 'saturation';
+      ctx.fillStyle = '#808080';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.globalCompositeOperation = 'source-over';
+      ctx.globalAlpha = 0.25;
+      ctx.fillStyle = '#aaaaaa';
+      ctx.fillRect(0, 0, canvasW, canvasH);
+      ctx.globalAlpha = 1;
+      ctx.drawImage(cleanCanvas, 0, 0);
+    };
+    img.src = prev;
+  } else {
+    ctx.drawImage(cleanCanvas, 0, 0);
+  }
+}
+
+/* ---------- Рисование ---------- */
+function getPos(e) {
+  const rect = mainCanvas.getBoundingClientRect();
+  const scaleX = canvasW / rect.width;
+  const scaleY = canvasH / rect.height;
+  return {
+    x: (e.clientX - rect.left) * scaleX,
+    y: (e.clientY - rect.top) * scaleY
+  };
+}
+
+function startDraw(e) {
+  if (playing) return;
+  e.preventDefault();
+  isDrawing = true;
+  try { mainCanvas.setPointerCapture(e.pointerId); } catch(err) {}
+  const p = getPos(e);
+  lastX = p.x; lastY = p.y;
+  drawDot(p.x, p.y);
+}
+function drawMove(e) {
+  if (!isDrawing || playing) return;
+  e.preventDefault();
+  const p = getPos(e);
+  drawLine(lastX, lastY, p.x, p.y);
+  lastX = p.x; lastY = p.y;
+}
+function endDraw(e) {
+  if (!isDrawing) return;
+  isDrawing = false;
+  if (e && e.pointerId !== undefined) {
+    try { mainCanvas.releasePointerCapture(e.pointerId); } catch(err) {}
+  }
+  scheduleAutosave();
+}
+
+function drawDot(x, y) {
+  cleanCtx.beginPath();
+  cleanCtx.arc(x, y, penSize / 2, 0, Math.PI * 2);
+  cleanCtx.fillStyle = tool === 'eraser' ? '#ffffff' : penColor;
+  cleanCtx.fill();
+  composeView();
+}
+function drawLine(x1, y1, x2, y2) {
+  cleanCtx.beginPath();
+  cleanCtx.moveTo(x1, y1);
+  cleanCtx.lineTo(x2, y2);
+  cleanCtx.strokeStyle = tool === 'eraser' ? '#ffffff' : penColor;
+  cleanCtx.lineWidth = penSize;
+  cleanCtx.lineCap = 'round';
+  cleanCtx.lineJoin = 'round';
+  cleanCtx.stroke();
+  composeView();
+}
+
+function setTool(t) {
+  tool = t;
+  document.getElementById('penBtn').classList.toggle('active', t === 'pen');
+  document.getElementById('eraserBtn').classList.toggle('active', t === 'eraser');
+}
+
+function clearFrame() {
+  if (playing) return;
+  if (!confirm('Очистить текущий кадр?')) return;
+  cleanCtx.clearRect(0, 0, canvasW, canvasH);
+  composeView();
+  scheduleAutosave();
+}
+
+function updatePenSizeLabel() {
+  document.getElementById('penSizeVal').textContent = penSize;
+}
+document.getElementById('penSizeRange').addEventListener('input', e => {
+  penSize = parseInt(e.target.value);
+  updatePenSizeLabel();
+});
+
+/* ---------- Слайд-бар ---------- */
+function renderSlidebar() {
+  const bar = document.getElementById('slidebar');
+  bar.innerHTML = '';
+  frames.forEach((f, i) => {
+    const thumb = document.createElement('div');
+    thumb.className = 'slide-thumb' + (i === currentFrame ? ' active' : '');
+    const c = document.createElement('canvas');
+    c.width = 64; c.height = 48;
+    const tctx = c.getContext('2d');
+    tctx.fillStyle = '#fff';
+    tctx.fillRect(0, 0, 64, 48);
+    if (f) {
+      const img = new Image();
+      img.onload = () => tctx.drawImage(img, 0, 0, 64, 48);
+      img.src = f;
+    }
+    thumb.appendChild(c);
+    const num = document.createElement('span');
+    num.className = 'num';
+    num.textContent = i + 1;
+    thumb.appendChild(num);
+    thumb.onclick = () => {
+      if (playing) return;
+      saveCurrentFrame();
+      loadFrame(i);
+    };
+    bar.appendChild(thumb);
+  });
+  const add = document.createElement('div');
+  add.className = 'add-slide';
+  add.textContent = '＋';
+  add.title = 'Создать следующий кадр';
+  add.onclick = addFrame;
+  bar.appendChild(add);
+}
+
+function addFrame() {
+  if (playing) return;
+  saveCurrentFrame();
+  frames.push(null);
+  currentProject.frameCount = frames.length;
+  loadFrame(frames.length - 1);
+  scheduleAutosave();
+}
+
+/* ---------- Воспроизведение ---------- */
+function togglePlay() {
+  if (playing) { stopPlay(); return; }
+  saveCurrentFrame();
+  playing = true;
+  document.getElementById('playBtn').textContent = '⏹';
+  document.getElementById('canvasWrap').classList.add('playing');
+  document.getElementById('hint').style.display = 'none';
+
+  const dur = 1000 / fps;
+  let i = 0;
+  const pctx = ctx;
+
+  function drawFrame(idx) {
+    pctx.fillStyle = '#ffffff';
+    pctx.fillRect(0, 0, canvasW, canvasH);
+    if (frames[idx]) {
+      const img = new Image();
+      img.onload = () => pctx.drawImage(img, 0, 0, canvasW, canvasH);
+      img.src = frames[idx];
+    }
+  }
+
+  drawFrame(0);
+  playInterval = setInterval(() => {
+    i = (i + 1) % frames.length;
+    drawFrame(i);
+  }, dur);
+}
+
+function stopPlay() {
+  playing = false;
+  if (playInterval) { clearInterval(playInterval); playInterval = null; }
+  document.getElementById('playBtn').textContent = '▶';
+  document.getElementById('canvasWrap').classList.remove('playing');
+  document.getElementById('hint').style.display = '';
+  loadFrame(currentFrame);
+}
+
+/* ---------- Магазин ---------- */
+function toggleShop() {
+  document.getElementById('shopPanel').classList.toggle('open');
+}
+
+function renderColorSwatches() {
+  const row = document.getElementById('colorRow');
+  row.innerHTML = '';
+  COLORS.forEach(c => {
+    const sw = document.createElement('div');
+    sw.className = 'color-swatch' + (c === shapeColor ? ' active' : '');
+    sw.style.background = c;
+    sw.onclick = () => {
+      shapeColor = c;
+      renderColorSwatches();
+    };
+    row.appendChild(sw);
+  });
+}
+
+document.getElementById('shapeSize').addEventListener('input', e => {
+  shapeSize = parseInt(e.target.value);
+  document.getElementById('sizeVal').textContent = shapeSize;
+});
+
+function addShape(type) {
+  if (playing) return;
+  const cx = canvasW / 2;
+  const cy = canvasH / 2;
+  const s = shapeSize;
+
+  cleanCtx.fillStyle = shapeColor;
+  cleanCtx.strokeStyle = shapeColor;
+
+  cleanCtx.beginPath();
+  switch (type) {
+    case 'circle':
+      cleanCtx.arc(cx, cy, s / 2, 0, Math.PI * 2);
+      cleanCtx.fill();
+      break;
+    case 'square':
+      cleanCtx.fillRect(cx - s / 2, cy - s / 2, s, s);
+      break;
+    case 'triangle':
+      cleanCtx.moveTo(cx, cy - s / 2);
+      cleanCtx.lineTo(cx + s / 2, cy + s / 2);
+      cleanCtx.lineTo(cx - s / 2, cy + s / 2);
+      cleanCtx.closePath();
+      cleanCtx.fill();
+      break;
+    case 'star': {
+      const spikes = 5, outer = s / 2, inner = s / 4;
+      let rot = -Math.PI / 2;
+      const step = Math.PI / spikes;
+      cleanCtx.moveTo(cx + Math.cos(rot) * outer, cy + Math.sin(rot) * outer);
+      for (let i = 0; i < spikes; i++) {
+        rot += step;
+        cleanCtx.lineTo(cx + Math.cos(rot) * inner, cy + Math.sin(rot) * inner);
+        rot += step;
+        cleanCtx.lineTo(cx + Math.cos(rot) * outer, cy + Math.sin(rot) * outer);
+      }
+      cleanCtx.closePath();
+      cleanCtx.fill();
+      break;
+    }
+    case 'heart': {
+      const k = s / 30;
+      cleanCtx.moveTo(cx, cy + 10 * k);
+      cleanCtx.bezierCurveTo(cx, cy + 5 * k, cx - 15 * k, cy - 5 * k, cx - 15 * k, cy - 12 * k);
+      cleanCtx.bezierCurveTo(cx - 15 * k, cy - 22 * k, cx, cy - 22 * k, cx, cy - 12 * k);
+      cleanCtx.bezierCurveTo(cx, cy - 22 * k, cx + 15 * k, cy - 22 * k, cx + 15 * k, cy - 12 * k);
+      cleanCtx.bezierCurveTo(cx + 15 * k, cy - 5 * k, cx, cy + 5 * k, cx, cy + 10 * k);
+      cleanCtx.closePath();
+      cleanCtx.fill();
+      break;
+    }
+  }
+  composeView();
+  scheduleAutosave();
+}
+
+/* ======================================================
+   ЭКСПОРТ ВИДЕО
+====================================================== */
+async function exportVideo() {
+  if (playing) stopPlay();
+  saveCurrentFrame();
+
+  if (!frames.length) { toast('Нет кадров'); return; }
+
+  // выбираем mime
+  let mime = '';
+  const candidates = [
+    'video/mp4;codecs=avc1.42E01E',
+    'video/mp4',
+    'video/webm;codecs=vp9',
+    'video/webm;codecs=vp8',
+    'video/webm'
+  ];
+  for (const m of candidates) {
+    if (window.MediaRecorder && MediaRecorder.isTypeSupported(m)) { mime = m; break; }
+  }
+  if (!mime) {
+    toast('Ваш браузер не поддерживает запись видео');
+    return;
+  }
+  const ext = mime.includes('mp4') ? 'mp4' : 'webm';
+
+  // оверлей
+  const overlay = document.getElementById('exportOverlay');
+  const fill = document.getElementById('progressFill');
+  const status = document.getElementById('exportStatus');
+  overlay.classList.add('active');
+  fill.style.width = '0%';
+  status.textContent = 'Подготовка кадров...';
+
+  // offscreen-канвас нужного размера (чётный, для кодировщика)
+  const w = canvasW % 2 === 0 ? canvasW : canvasW + 1;
+  const h = canvasH % 2 === 0 ? canvasH : canvasH + 1;
+  const expCanvas = document.createElement('canvas');
+  expCanvas.width = w;
+  expCanvas.height = h;
+  const ectx = expCanvas.getContext('2d');
+
+  // предзагрузка изображений
+  const images = [];
+  for (let i = 0; i < frames.length; i++) {
+    if (frames[i]) {
+      const img = await loadImage(frames[i]);
+      images.push(img);
+    } else {
+      images.push(null);
+    }
+    if (i % 10 === 0) {
+      fill.style.width = (5 + (i / frames.length) * 25) + '%';
+      await sleep(0);
+    }
+  }
+
+  // поток с канваса
+  const stream = expCanvas.captureStream(0); // 0 — ручной requestFrame
+  const track = stream.getVideoTracks()[0];
+
+  let recorder;
+  try {
+    recorder = new MediaRecorder(stream, {
+      mimeType: mime,
+      videoBitsPerSecond: 6_000_000
+    });
+  } catch (e) {
+    overlay.classList.remove('active');
+    toast('Не удалось создать рекордер: ' + e.message);
+    return;
+  }
+
+  const chunks = [];
+  recorder.ondataavailable = e => { if (e.data && e.data.size > 0) chunks.push(e.data); };
+
+  const donePromise = new Promise((resolve) => {
+    recorder.onstop = () => {
+      const blob = new Blob(chunks, { type: mime });
+      resolve(blob);
+    };
+  });
+
+  recorder.start();
+
+  // рисуем кадры с нужной частотой через requestFrame
+  const frameDur = 1000 / fps;
+  const total = images.length;
+
+  for (let i = 0; i < total; i++) {
+    ectx.fillStyle = '#ffffff';
+    ectx.fillRect(0, 0, w, h);
+    if (images[i]) {
+      ectx.drawImage(images[i], 0, 0, w, h);
+    }
+    if (track.requestFrame) track.requestFrame();
+    fill.style.width = (30 + (i / total) * 65) + '%';
+    status.textContent = `Запись кадра ${i + 1} из ${total}...`;
+    await sleep(frameDur);
+  }
+
+  // последний кадр подержать чуть-чуть
+  await sleep(120);
+
+  status.textContent = 'Финализация...';
+  recorder.stop();
+  const blob = await donePromise;
+  fill.style.width = '100%';
+
+  // сохранение
+  const fileName = (currentProject ? currentProject.name.replace(/[^\wа-яА-Я\- ]/g, '') : 'animation') + '.' + ext;
+
+  let saved = false;
+
+  // 1) navigator.share
+  if (navigator.canShare && navigator.share) {
+    try {
+      const file = new File([blob], fileName, { type: mime });
+      if (navigator.canShare({ files: [file] })) {
+        await navigator.share({ files: [file], title: 'Анимация' });
+        saved = true;
+        status.textContent = 'Отправлено!';
+      }
+    } catch (e) {
+      // пользователь отменил — не считаем ошибкой
+      if (e.name === 'AbortError') { saved = true; status.textContent = 'Отменено'; }
+    }
+  }
+
+  // 2) a.download
+  if (!saved) {
+    try {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 10000);
+      saved = true;
+      status.textContent = 'Файл сохранён в «Загрузки»';
+    } catch (e) {
+      console.error(e);
+    }
+  }
+
+  // 3) открыть в новой вкладке
+  if (!saved) {
+    const url = URL.createObjectURL(blob);
+    window.open(url, '_blank');
+    status.textContent = 'Открыто в новой вкладке — сохраните вручную';
+    saved = true;
+  }
+
+  await sleep(1200);
+  overlay.classList.remove('active');
+  if (saved) toast('Готово!');
+}
+
+function loadImage(src) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
+function sleep(ms) {
+  return new Promise(r => setTimeout(r, ms));
+}
+
+/* ---------- Предупреждение при закрытии ---------- */
+window.addEventListener('beforeunload', (e) => {
+  if (unsavedChanges) {
+    e.preventDefault();
+    e.returnValue = '';
+  }
+  if (currentProject) {
+    saveCurrentFrame();
+    currentProject.frameCount = frames.length;
+    // синхронно сохранить только метаданные; кадры — асинхронно (может не успеть)
+    saveProjectsMeta();
+    try { saveProjectFrames(currentProject.id, frames); } catch(err) {}
+  }
+});
+
+window.addEventListener('resize', () => {
+  if (document.getElementById('editorScreen').classList.contains('active') && mainCanvas) {
+    resizeCanvasDisplay();
+  }
+});
+
+/* ---------- Инициализация ---------- */
+(async function init() {
+  loadProjects();
+  try { await dbPromise; } catch (e) { console.warn('IndexedDB недоступна:', e); }
+  renderProjects();
+})();
+</script>
+</body>
+</html>
